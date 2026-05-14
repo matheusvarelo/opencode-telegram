@@ -1,0 +1,23 @@
+[Unit]
+Description=OpenCode Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=matheus
+WorkingDirectory=/home/matheus/Projetos/opencode_telegram
+ExecStart=/home/matheus/Projetos/opencode_telegram/.venv/bin/python src/bot.py
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/home/matheus/Projetos/opencode_telegram/.env
+
+# Security hardening — ProtectSystem=full (not strict) to allow opencode writes
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/matheus/.config/opencode /home/matheus/.local/share/opencode /home/matheus/.cache /tmp /home/matheus/Projetos/opencode_telegram
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
