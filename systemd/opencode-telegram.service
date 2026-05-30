@@ -5,18 +5,20 @@ After=network.target
 [Service]
 Type=simple
 User=matheus
-WorkingDirectory=/home/matheus/Projetos/opencode_telegram
-ExecStart=/home/matheus/Projetos/opencode_telegram/.venv/bin/python src/bot.py
+WorkingDirectory=/home/matheus/projetos/opencode-telegram
+ExecStart=/home/matheus/projetos/opencode-telegram/.venv/bin/python src/bot.py
 Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
-EnvironmentFile=/home/matheus/Projetos/opencode_telegram/.env
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+EnvironmentFile=/home/matheus/projetos/opencode-telegram/.env
 
 # Security hardening — ProtectSystem=full (not strict) to allow opencode writes
 NoNewPrivileges=true
 ProtectSystem=full
 ProtectHome=read-only
-ReadWritePaths=/home/matheus/.config/opencode /home/matheus/.local/share/opencode /home/matheus/.cache /tmp /home/matheus/Projetos/opencode_telegram
+ReadWritePaths=/home/matheus/.config/opencode /home/matheus/.local/share/opencode /home/matheus/.local/state/opencode /home/matheus/.cache /tmp /home/matheus/projetos/opencode-telegram
 PrivateTmp=true
 
 [Install]

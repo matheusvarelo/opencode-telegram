@@ -2,8 +2,13 @@ import asyncio
 import json
 import logging
 import os
+import signal
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 from subprocess import PIPE
+import shlex
 
 from dotenv import load_dotenv
 from telegram import Update
@@ -38,6 +43,7 @@ if _raw_allowed.strip():
 MAX_MSG = 4096
 TIMEOUT_SECONDS = 300
 
+
 # Session store: chat_id → session_id
 sessions: dict[int, str] = {}
 
@@ -57,8 +63,10 @@ async def run_opencode(message: str, session_id: str | None) -> tuple[str, str |
     args.append("--")
     args.append(message)
 
+    # Wrap in bash -c because opencode binary needs a shell to output JSON properly
+    cmd = " ".join(shlex.quote(a) for a in args)
     proc = await asyncio.create_subprocess_exec(
-        *args,
+        "bash", "-c", cmd,
         stdout=PIPE,
         stderr=PIPE,
         cwd=WORK_DIR,
@@ -183,7 +191,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🤖 *OpenCode Bot*\n\n"
         "Send me any message and I'll process it using OpenCode AI.\n\n"
         "*Commands:*\n"
-        "/reset — Clear conversation context\n"
+        "/reset — Clear conversation context and start a new session\n"
+        "/session — Show current session ID\n"
+        "/screenshot — Take a screenshot (uses desktop portal)\n"
         "/start — Show this message",
         parse_mode="Markdown",
     )
@@ -195,6 +205,61 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🔄 Context cleared. Starting fresh conversation."
     )
+
+
+async def session(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    sid = sessions.get(chat_id)
+    if sid:
+        await update.message.reply_text(f"🔑 Active session: `{sid}`", parse_mode="Markdown")
+    else:
+        await update.message.reply_text("ℹ️ No active session. Send a message to start one.")
+
+
+async def screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Take a screenshot using XDG Desktop Portal and send it to the chat."""
+    chat_id = update.effective_chat.id
+
+    await update.message.chat.send_action("upload_photo")
+
+    try:
+        # Run the synchronous screenshot helper via subprocess
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            str(Path(__file__).resolve().parent.parent / "take_screenshot.py"),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "WAYLAND_DISPLAY": os.environ.get("WAYLAND_DISPLAY", "wayland-0")},
+        )
+
+        stdout_data, stderr_data = await asyncio.wait_for(
+            proc.communicate(), timeout=20
+        )
+
+        if proc.returncode != 0:
+            err = stderr_data.decode().strip() or "unknown error"
+            await update.message.reply_text(f"❌ Falha ao tirar screenshot: {err}")
+            return
+
+        screenshot_path = stdout_data.decode().strip()
+        if not screenshot_path or not os.path.exists(screenshot_path):
+            await update.message.reply_text("❌ Screenshot não foi salvo.")
+            return
+
+        with open(screenshot_path, "rb") as photo:
+            await update.message.reply_photo(photo, caption="📸 Screenshot")
+
+        # Clean up
+        try:
+            os.unlink(screenshot_path)
+        except OSError:
+            pass
+
+    except asyncio.TimeoutError:
+        await update.message.reply_text("⏱️ Timeout ao tirar screenshot (20s).")
+    except Exception as e:
+        logger.exception("Screenshot error for chat %d", chat_id)
+        await update.message.reply_text(f"❌ Erro: {e}")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -240,19 +305,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pending.discard(chat_id)
 
 
+async def async_main():
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("reset", reset))
+    app.add_handler(CommandHandler("session", session))
+    app.add_handler(CommandHandler("screenshot", screenshot))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    print("🤖 OpenCode Telegram bot started. Polling for messages...")
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(drop_pending_updates=True)
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop_event.set)
+    try:
+        await stop_event.wait()
+    finally:
+        await app.updater.stop()
+        await app.stop()
+        await app.shutdown()
+
+
 def main():
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s"
     )
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("reset", reset))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    print("🤖 OpenCode Telegram bot started. Polling for messages...")
-    app.run_polling(drop_pending_updates=True)
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":

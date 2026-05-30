@@ -1,0 +1,8 @@
+2026-05-15 22:40:58,112 INFO HTTP Request: POST https://api.telegram.org/bot8716295229:AAGjhfzWJxQt-bL86enCU3smw0YhxOSTiQA/getMe "HTTP/1.1 200 OK"
+2026-05-15 22:40:58,116 INFO Application started
+2026-05-15 22:40:58,354 INFO HTTP Request: POST https://api.telegram.org/bot8716295229:AAGjhfzWJxQt-bL86enCU3smw0YhxOSTiQA/deleteWebhook "HTTP/1.1 200 OK"
+2026-05-15 22:41:09,345 INFO HTTP Request: POST https://api.telegram.org/bot8716295229:AAGjhfzWJxQt-bL86enCU3smw0YhxOSTiQA/getUpdates "HTTP/1.1 200 OK"
+2026-05-15 22:41:18,725 INFO HTTP Request: POST https://api.telegram.org/bot8716295229:AAGjhfzWJxQt-bL86enCU3smw0YhxOSTiQA/getUpdates "HTTP/1.1 200 OK"
+2026-05-15 22:41:18,727 INFO Application is stopping. This might take a moment.
+2026-05-15 22:41:18,727 INFO Application.stop() complete
+🤖 OpenCode Telegram bot started. Polling for messages...
